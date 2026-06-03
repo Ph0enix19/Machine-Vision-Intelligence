@@ -61,6 +61,8 @@ MVI_HANY_ROBOFLOW_MODEL_ID=mvi-task-2-dqpn6/2
 
 The dashboard still runs without these values; adapters that require unavailable credentials or files are shown as unavailable.
 
+Do not commit real API keys to this repository. For Streamlit Community Cloud, add the key in the app settings under Secrets. For local development, set the environment variable in your terminal before starting Streamlit.
+
 ## Project Structure
 
 ```text
@@ -76,4 +78,5 @@ requirements.txt          Python packages for Streamlit deployment
 
 - Training is not started from the dashboard. Use the scripts folder for local training or validation.
 - Streamlit Cloud does not provide access to your local webcam, so image and video upload workflows are the best deployment targets.
+- Streamlit Cloud cannot save files to a user-selected folder on the visitor's computer. Processed videos and CSV files are generated on the server and exposed with download buttons in the browser.
 - Generated outputs, raw datasets, cache folders, virtual environments, and large source ZIP files are intentionally ignored from git.

@@ -534,10 +534,17 @@ def page_upload_video() -> None:
         remember_run(f"Video - {adapter.name}", final_result, rows=report.get("latest_rows", []))
         st.info("Video summary below is based on the latest processed frame only. The saved CSV still contains frame-by-frame records.")
         display_result(final_result, title=f"Video Result - {adapter.name}")
-    st.success(f"Saved CSV results: {output_csv}")
+    st.success("CSV results are ready.")
     if not preview_only:
-        st.success(f"Saved processed video: {output_video}")
+        st.success("Processed video is ready.")
         st.video(str(output_video))
+        if Path(output_video).exists():
+            st.download_button(
+                "Download processed video",
+                Path(output_video).read_bytes(),
+                file_name=output_video.name,
+                mime="video/mp4",
+            )
     if Path(output_csv).exists():
         st.download_button("Download video CSV", Path(output_csv).read_bytes(), file_name=output_csv.name, mime="text/csv")
 
