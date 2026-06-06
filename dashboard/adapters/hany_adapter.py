@@ -11,15 +11,8 @@ import requests
 
 from dashboard.adapters.base import BaseInspectionAdapter
 from dashboard.config import HANY_ROBOFLOW_API_KEY, HANY_ROBOFLOW_MODEL_ID
-from dashboard.results_schema import make_task_result
-from dashboard.vision_tasks import (
-    colour_health_record,
-    contour_from_box,
-    contour_measurements,
-    contours_from_mask,
-    draw_label,
-    foreground_mask,
-)
+from dashboard.results_schema import make_task_result, make_unavailable_result
+from dashboard.vision_tasks import draw_label
 
 
 class HanyAdapter(BaseInspectionAdapter):
@@ -27,50 +20,53 @@ class HanyAdapter(BaseInspectionAdapter):
     member = "Hany"
     task_id = "IV"
     task_name = "Maturity and Health Condition"
-    method_name = "Roboflow Detection + HSV/RGB Color Analysis"
-    task_type = "AI + Classical Image Processing"
-    description = "Uses Hany's Roboflow model when configured, then applies local RGB/HSV maturity and health analysis with an OpenCV fallback."
-    main_outputs = ("RGB", "HSV", "color uniformity", "discoloration", "maturity", "health")
+    method_name = "Roboflow Hosted Detection"
+    task_type = "AI / Hosted Inference"
+    description = "Uses Hany's original Roboflow model behavior: hosted inference, class labels, confidence scores, and bounding boxes."
+    main_outputs = ("Roboflow class", "confidence", "maturity", "health")
 
     def __init__(self) -> None:
         self._inference_error = ""
 
+    def is_available(self) -> bool:
+        return bool(HANY_ROBOFLOW_API_KEY)
+
     def availability_message(self) -> str:
         if not HANY_ROBOFLOW_API_KEY:
-            return "Available with OpenCV fallback. Add MVI_HANY_ROBOFLOW_API_KEY to enable Roboflow."
+            return "Unavailable: add MVI_HANY_ROBOFLOW_API_KEY to enable Hany's Roboflow model."
         if self._inference_error:
-            return f"Available with OpenCV fallback. Roboflow warning: {self._inference_error}"
+            return f"Roboflow error: {self._inference_error}"
         return f"Available with Roboflow model {HANY_ROBOFLOW_MODEL_ID}."
 
     def process_image(self, image_bgr: np.ndarray, **options: Any) -> dict[str, Any]:
+        if not HANY_ROBOFLOW_API_KEY:
+            return make_unavailable_result(
+                annotated_frame=image_bgr.copy(),
+                member=self.member,
+                task_id=self.task_id,
+                task_name=self.task_name,
+                method=self.method_name,
+                reason="MVI_HANY_ROBOFLOW_API_KEY is not configured.",
+            )
+
         start = time.perf_counter()
         confidence = float(options.get("confidence", 0.40))
-        min_area = int(options.get("min_area", max(250, image_bgr.shape[0] * image_bgr.shape[1] * 0.0004)))
         annotated = image_bgr.copy()
         predictions = self._infer(image_bgr, confidence)
-        detections = self._detections_from_predictions(image_bgr, annotated, predictions, min_area)
-        inference_mode = "Roboflow" if detections else "OpenCV fallback"
+        if self._inference_error:
+            return make_unavailable_result(
+                annotated_frame=annotated,
+                member=self.member,
+                task_id=self.task_id,
+                task_name=self.task_name,
+                method=self.method_name,
+                reason=self._inference_error,
+            )
 
-        if not detections:
-            mask = foreground_mask(image_bgr)
-            contours = contours_from_mask(image_bgr, mask, min_area)
-            for contour in sorted(contours, key=cv2.contourArea, reverse=True):
-                measurements = contour_measurements(contour)
-                if float(measurements["area"]) < min_area:
-                    continue
-                record = colour_health_record(image_bgr, contour)
-                record["id"] = len(detections) + 1
-                record["roboflow_class"] = None
-                record["confidence"] = None
-                detections.append(record)
-                colour = (0, 180, 0) if record["health_label"] == "Healthy" else (0, 0, 220)
-                cv2.drawContours(annotated, [contour], -1, colour, 2)
-                draw_label(annotated, f"{record['maturity_label']} | {record['health_label']}", int(measurements["box_x"]), int(measurements["box_y"]), colour)
+        detections = self._detections_from_predictions(image_bgr, annotated, predictions)
 
-        maturity_counts = Counter(row["maturity_label"] for row in detections)
-        health_counts = Counter(row["health_label"] for row in detections)
-        discoloration_count = sum(1 for row in detections if row["discoloration_status"] != "None")
-        dark_patch_count = sum(1 for row in detections if float(row["dark_patch_ratio"]) > 0.08)
+        maturity_counts = Counter(row["maturity_label"] for row in detections if row.get("maturity_label"))
+        health_counts = Counter(row["health_label"] for row in detections if row.get("health_label"))
         elapsed = max(time.perf_counter() - start, 1e-6)
         return make_task_result(
             annotated_frame=annotated,
@@ -85,17 +81,20 @@ class HanyAdapter(BaseInspectionAdapter):
                 "immature_count": maturity_counts.get("Immature", 0),
                 "overripe_count": maturity_counts.get("Overripe", 0),
                 "healthy_count": health_counts.get("Healthy", 0),
-                "discoloration_count": discoloration_count,
-                "dark_patch_count": dark_patch_count,
+                "discoloration_count": 0,
+                "dark_patch_count": 0,
             },
-            task_outputs={"maturity_counts": dict(maturity_counts), "health_counts": dict(health_counts)},
+            task_outputs={
+                "maturity_counts": dict(maturity_counts),
+                "health_counts": dict(health_counts),
+                "roboflow_class_counts": dict(Counter(row["roboflow_class"] for row in detections)),
+            },
             detections=detections,
             metadata={
                 "adapter": self.name,
                 "fps": 1.0 / elapsed,
-                "inference_mode": inference_mode,
-                "roboflow_model": HANY_ROBOFLOW_MODEL_ID if inference_mode == "Roboflow" else "",
-                "roboflow_error": self._inference_error,
+                "inference_mode": "Roboflow",
+                "roboflow_model": HANY_ROBOFLOW_MODEL_ID,
                 "original_code": "group_members/hany/original/V3.py",
             },
         )
@@ -141,7 +140,6 @@ class HanyAdapter(BaseInspectionAdapter):
         image_bgr: np.ndarray,
         annotated: np.ndarray,
         predictions: list[dict[str, Any]],
-        min_area: int,
     ) -> list[dict[str, Any]]:
         height, width = image_bgr.shape[:2]
         detections: list[dict[str, Any]] = []
@@ -154,28 +152,30 @@ class HanyAdapter(BaseInspectionAdapter):
             y1 = max(0, center_y - box_height // 2)
             x2 = min(width - 1, center_x + box_width // 2)
             y2 = min(height - 1, center_y + box_height // 2)
-            if x2 <= x1 or y2 <= y1 or (x2 - x1) * (y2 - y1) < min_area:
+            if x2 <= x1 or y2 <= y1:
                 continue
 
-            contour = contour_from_box(x1, y1, x2, y2)
-            record = colour_health_record(image_bgr, contour)
             class_name = str(prediction.get("class", "object"))
-            maturity_override, health_override = _labels_from_class(class_name)
-            if maturity_override:
-                record["maturity_label"] = maturity_override
-            if health_override:
-                record["health_label"] = health_override
-                record["discoloration_status"] = "None" if health_override == "Healthy" else health_override
-            record.update(
-                {
-                    "id": len(detections) + 1,
-                    "roboflow_class": class_name,
-                    "confidence": float(prediction.get("confidence", 0.0)),
-                }
-            )
+            maturity_label, health_label = _labels_from_class(class_name)
+            record = {
+                "id": len(detections) + 1,
+                "mean_r": None,
+                "mean_g": None,
+                "mean_b": None,
+                "mean_h": None,
+                "mean_s": None,
+                "mean_v": None,
+                "color_uniformity": None,
+                "discoloration_status": None,
+                "dark_patch_ratio": None,
+                "maturity_label": maturity_label,
+                "health_label": health_label,
+                "roboflow_class": class_name,
+                "confidence": float(prediction.get("confidence", 0.0)),
+            }
             detections.append(record)
 
-            colour = (0, 180, 0) if record["health_label"] == "Healthy" else (0, 0, 220)
+            colour = _class_colour(class_name)
             cv2.rectangle(annotated, (x1, y1), (x2, y2), colour, 2)
             draw_label(
                 annotated,
@@ -205,3 +205,14 @@ def _labels_from_class(class_name: str) -> tuple[str | None, str | None]:
     elif "healthy" in label:
         health = "Healthy"
     return maturity, health
+
+
+def _class_colour(class_name: str) -> tuple[int, int, int]:
+    palette = [
+        (255, 82, 82),
+        (82, 255, 121),
+        (82, 182, 255),
+        (255, 210, 82),
+        (210, 82, 255),
+    ]
+    return palette[hash(class_name) % len(palette)]
