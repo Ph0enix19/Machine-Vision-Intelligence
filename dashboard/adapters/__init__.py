@@ -9,6 +9,7 @@ from dashboard.adapters.hany_task1_adapter import HanyTask1Adapter
 from dashboard.adapters.hemdan_task1_external_adapter import HemdanTask1ExternalAdapter
 from dashboard.adapters.hemdan_yolo_adapter import HemdanYoloAdapter
 from dashboard.adapters.tim_adapter import TimAdapter
+from dashboard.adapters.tim_task1_adapter import TimTask1Adapter
 
 
 def get_adapters():
@@ -17,6 +18,7 @@ def get_adapters():
         AdonaiTask1Adapter(),
         AliTask1Adapter(),
         HanyTask1Adapter(),
+        TimTask1Adapter(),
         HemdanYoloAdapter(),
         AdonaiAdapter(),
         AliAdapter(),

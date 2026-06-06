@@ -74,6 +74,8 @@ TASKS = {
             "dark_patch_ratio",
             "maturity_label",
             "health_label",
+            "roboflow_class",
+            "confidence",
         ],
     },
     "V": {

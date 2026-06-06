@@ -9,6 +9,7 @@ Streamlit dashboard for an APU Machine Vision assignment. The app combines sever
 - Growth measurement outputs such as length, width, area, perimeter, aspect ratio, and circularity.
 - Maturity and health analysis using colour features.
 - Texture inspection using localization and OpenCV texture metrics.
+- Tim Task 1 texture classification using his original OpenCV ranking and temporal tracking logic.
 - Upload workflows for images and videos, plus optional local live camera inspection.
 
 ## App Entry Point
@@ -63,12 +64,16 @@ The dashboard still runs without these values; adapters that require unavailable
 
 Do not commit real API keys to this repository. For Streamlit Community Cloud, add the key in the app settings under Secrets. For local development, set the environment variable in your terminal before starting Streamlit.
 
+For local Streamlit development, you can also create `.streamlit/secrets.toml` using `.streamlit/secrets.toml.example` as the template. The real secrets file is ignored by git.
+
 ## Project Structure
 
 ```text
 app.py                    Streamlit dashboard
 dashboard/                Shared dashboard logic, adapters, config, and result schema
 group_members/            Integrated member model adapters and required weights
+group_members/tim/task1_original/
+                           Tim's preserved Task 1 OpenCV source
 runs/segment/.../best.pt  Hemdan YOLO segmentation weights
 scripts/                  Training, validation, and dataset helper scripts
 requirements.txt          Python packages for Streamlit deployment

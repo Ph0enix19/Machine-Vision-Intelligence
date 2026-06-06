@@ -452,7 +452,7 @@ def page_upload_image() -> None:
     results: list[tuple[str, dict[str, Any]]] = []
     for item in adapters_to_run:
         with st.spinner(f"Running {item.name}..."):
-            result = call_adapter(item, image_bgr, **options)
+            result = call_adapter(item, image_bgr, source_name=uploaded.name, **options)
         results.append((item.name, result))
     remember_many(results)
 
@@ -523,6 +523,7 @@ def page_upload_video() -> None:
             preview_callback=on_preview,
             max_frames=int(max_frames) if max_frames else None,
             preview_only=preview_only,
+            source_name=uploaded.name,
             **options,
         )
     finally:
