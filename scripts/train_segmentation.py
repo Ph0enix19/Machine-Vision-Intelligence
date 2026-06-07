@@ -11,37 +11,17 @@ RUN_NAME = "bean_seg_v1"
 EPOCHS = 300
 IMG_SIZE = 640
 AUTO_BATCH = -1
-FALLBACK_BATCH = 4
-MODEL_CANDIDATES = ("yolo11n-seg.pt", "yolov8n-seg.pt")
+BASE_MODEL = "yolo11n-seg.pt"
 
 
-def choose_device() -> int | str:
-    try:
-        import torch
+def require_cuda() -> int:
+    import torch
 
-        if torch.cuda.is_available():
-            print(f"CUDA available: {torch.cuda.get_device_name(0)}")
-            return 0
-    except Exception as exc:
-        print(f"Could not check CUDA with torch: {exc}")
+    if not torch.cuda.is_available():
+        raise RuntimeError("CUDA device 0 is required for this training configuration.")
 
-    print("CUDA is not available; training will use CPU.")
-    return "cpu"
-
-
-def load_model():
-    from ultralytics import YOLO
-
-    last_error: Exception | None = None
-    for weights in MODEL_CANDIDATES:
-        try:
-            print(f"Loading segmentation base model: {weights}")
-            return YOLO(weights), weights
-        except Exception as exc:
-            last_error = exc
-            print(f"WARNING: Could not load {weights}: {exc}")
-
-    raise RuntimeError(f"Could not load any segmentation base model. Last error: {last_error}")
+    print(f"CUDA available: {torch.cuda.get_device_name(0)}")
+    return 0
 
 
 def main() -> int:
@@ -50,8 +30,11 @@ def main() -> int:
         print("Run scripts/check_dataset.py and confirm the dataset folder exists.")
         return 1
 
-    model, base_weights = load_model()
-    device = choose_device()
+    from ultralytics import YOLO
+
+    device = require_cuda()
+    print(f"Loading segmentation base model: {BASE_MODEL}")
+    model = YOLO(BASE_MODEL)
 
     train_args = {
         "task": "segment",
@@ -67,18 +50,12 @@ def main() -> int:
 
     print()
     print("Starting YOLO segmentation training")
-    print(f"Base weights: {base_weights}")
+    print(f"Base weights: {BASE_MODEL}")
     print(f"Data: {DATA_YAML}")
     print(f"Project: {PROJECT_DIR}")
     print(f"Run name: {RUN_NAME}")
 
-    try:
-        model.train(**train_args)
-    except Exception as exc:
-        print(f"WARNING: Training with auto batch failed: {exc}")
-        print(f"Retrying with batch={FALLBACK_BATCH}")
-        train_args["batch"] = FALLBACK_BATCH
-        model.train(**train_args)
+    model.train(**train_args)
 
     weights_dir = PROJECT_DIR / RUN_NAME / "weights"
     best_pt = weights_dir / "best.pt"

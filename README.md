@@ -4,13 +4,14 @@ Streamlit dashboard for an APU Machine Vision assignment. The app combines sever
 
 ## Features
 
-- Seed classification with YOLO segmentation and OpenCV fallbacks.
+- Seed classification with YOLO segmentation and original Task 1 implementations.
 - Seed quality inspection for healthy and defective beans.
 - Growth measurement outputs such as length, width, area, perimeter, aspect ratio, and circularity.
 - Maturity and health analysis using colour features.
 - Texture inspection using localization and OpenCV texture metrics.
 - Tim Task 1 texture classification using his original OpenCV ranking and temporal tracking logic.
 - Browser webcam inspection through WebRTC, plus image and video uploads.
+- Optional local HIK MVS camera source using the vendor Python SDK.
 
 ## App Entry Point
 
@@ -60,7 +61,7 @@ MVI_HANY_ROBOFLOW_API_KEY=your_key_here
 MVI_HANY_ROBOFLOW_MODEL_ID=mvi-task-2-dqpn6/2
 ```
 
-The dashboard still runs without these values, but Hany's Task 2 Roboflow adapter is shown as unavailable. It does not substitute an OpenCV fallback.
+The dashboard still runs without these values, but Hany's Task 2 Roboflow adapter is shown as unavailable. No alternate inspection method is substituted.
 
 Do not commit real API keys to this repository. For Streamlit Community Cloud, add the key in the app settings under Secrets. For local development, set the environment variable in your terminal before starting Streamlit.
 
@@ -83,6 +84,7 @@ requirements.txt          Python packages for Streamlit deployment
 
 - Training is not started from the dashboard. Use the scripts folder for local training or validation.
 - Streamlit Cloud cannot use server camera indexes. The live page instead uses browser WebRTC so each visitor can grant access to their own webcam.
+- HIK MVS mode is available only when Streamlit runs on a Windows computer connected to the HIK camera with the MVS SDK installed. It does not switch to another camera source when unavailable.
 - Some restrictive networks require a TURN service. Optional `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN` secrets enable Twilio Network Traversal Service automatically.
 - Streamlit Cloud cannot save files to a user-selected folder on the visitor's computer. Processed videos and CSV files are generated on the server and exposed with download buttons in the browser.
 - Generated outputs, raw datasets, cache folders, virtual environments, and large source ZIP files are intentionally ignored from git.

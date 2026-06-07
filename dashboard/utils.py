@@ -89,7 +89,7 @@ def call_adapter(adapter: Any, image_bgr: np.ndarray, *, frame: bool = False, **
             result = adapter.process_frame(image_bgr, **options)
         else:
             result = adapter.process_image(image_bgr, **options)
-        return ensure_result(result, fallback_frame=image_bgr)
+        return ensure_result(result, default_frame=image_bgr)
     except Exception as exc:
         annotated = image_bgr.copy()
         cv2.putText(
@@ -121,4 +121,3 @@ def format_value(value: Any) -> str:
     if isinstance(value, float):
         return f"{value:.2f}"
     return str(value)
-

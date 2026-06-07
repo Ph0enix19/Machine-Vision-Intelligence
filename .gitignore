@@ -8,6 +8,7 @@ __pycache__/
 .env
 
 outputs/
+testing/
 *.mp4
 *.avi
 

@@ -13,7 +13,7 @@ import numpy as np
 from dashboard.adapters.base import BaseInspectionAdapter
 from dashboard.config import ALI_YOLO_WEIGHTS, DEFAULT_IMG_SIZE
 from dashboard.results_schema import make_task_result, make_unavailable_result
-from dashboard.vision_tasks import contour_from_box, contour_measurements, contours_from_mask, draw_label, foreground_mask
+from dashboard.vision_tasks import contour_from_box, contour_measurements, draw_label
 
 
 class AliAdapter(BaseInspectionAdapter):
@@ -80,10 +80,6 @@ class AliAdapter(BaseInspectionAdapter):
 
         annotated = image_bgr.copy()
         detections = _measurement_detections_from_yolo(annotated, result)
-        fallback_used = False
-        if not detections:
-            detections = _measurement_detections_from_contours(image_bgr, annotated)
-            fallback_used = True
         lengths = [float(row["length"]) for row in detections if row.get("length") is not None]
         widths = [float(row["width"]) for row in detections if row.get("width") is not None]
         areas = [float(row["area"]) for row in detections if row.get("area") is not None]
@@ -112,7 +108,6 @@ class AliAdapter(BaseInspectionAdapter):
                 "confidence": confidence,
                 "weights": str(self.weights_path),
                 "original_code": "group_members/ali/original/live_seed_classifier.py",
-                "fallback": "OpenCV contour measurement" if fallback_used else "",
             },
         )
 
@@ -148,39 +143,4 @@ def _measurement_detections_from_yolo(annotated: np.ndarray, result: Any) -> lis
         colour = (20, 120, 220)
         cv2.drawContours(annotated, [contour], -1, colour, 2)
         draw_label(annotated, f"{measurements['shape']} L{measurements['length']:.0f} W{measurements['width']:.0f}", x1, y1, colour)
-    return detections
-
-
-def _measurement_detections_from_contours(image_bgr: np.ndarray, annotated: np.ndarray) -> list[dict[str, Any]]:
-    min_area = max(250, image_bgr.shape[0] * image_bgr.shape[1] * 0.0004)
-    mask = foreground_mask(image_bgr)
-    contours = contours_from_mask(image_bgr, mask, int(min_area))
-    detections: list[dict[str, Any]] = []
-    for contour in sorted(contours, key=cv2.contourArea, reverse=True):
-        measurements = contour_measurements(contour)
-        if float(measurements["area"]) < min_area:
-            continue
-        detections.append(
-            {
-                "id": len(detections) + 1,
-                "length": measurements["length"],
-                "width": measurements["width"],
-                "area": measurements["area"],
-                "perimeter": measurements["perimeter"],
-                "aspect_ratio": measurements["aspect_ratio"],
-                "circularity": measurements["circularity"],
-                "compactness": measurements["compactness"],
-                "equivalent_diameter": measurements["equivalent_diameter"],
-                "shape": measurements["shape"],
-            }
-        )
-        colour = (20, 120, 220)
-        cv2.drawContours(annotated, [contour], -1, colour, 2)
-        draw_label(
-            annotated,
-            f"{measurements['shape']} L{measurements['length']:.0f} W{measurements['width']:.0f}",
-            int(measurements["box_x"]),
-            int(measurements["box_y"]),
-            colour,
-        )
     return detections

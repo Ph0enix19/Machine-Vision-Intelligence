@@ -46,13 +46,13 @@ def make_video_frame_callback(
 
 
 def get_rtc_configuration() -> dict[str, Any]:
-    fallback = {
+    stun_configuration = {
         "iceServers": [
             {"urls": ["stun:stun.l.google.com:19302"]},
         ]
     }
     if not TWILIO_ACCOUNT_SID or not TWILIO_AUTH_TOKEN:
-        return fallback
+        return stun_configuration
 
     try:
         response = requests.post(
@@ -60,10 +60,14 @@ def get_rtc_configuration() -> dict[str, Any]:
             auth=(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN),
             timeout=10,
         )
-        if response.ok:
-            ice_servers = response.json().get("ice_servers")
-            if ice_servers:
-                return {"iceServers": ice_servers}
-    except (requests.RequestException, TypeError, ValueError):
-        pass
-    return fallback
+    except requests.RequestException as exc:
+        raise RuntimeError(f"Twilio ICE configuration request failed: {type(exc).__name__}.") from exc
+    if not response.ok:
+        raise RuntimeError(f"Twilio ICE configuration returned HTTP {response.status_code}.")
+    try:
+        ice_servers = response.json().get("ice_servers")
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError("Twilio ICE configuration returned invalid JSON.") from exc
+    if not ice_servers:
+        raise RuntimeError("Twilio ICE configuration did not include ICE servers.")
+    return {"iceServers": ice_servers}

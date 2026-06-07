@@ -12,7 +12,7 @@ import numpy as np
 from dashboard.adapters.base import BaseInspectionAdapter
 from dashboard.config import ADONAI_YOLO_WEIGHTS, DEFAULT_IMG_SIZE
 from dashboard.results_schema import make_task_result, make_unavailable_result
-from dashboard.vision_tasks import contour_from_box, contours_from_mask, draw_label, foreground_mask, quality_record
+from dashboard.vision_tasks import contour_from_box, draw_label, quality_record
 
 
 CLASS_CONF_THRESHOLD = {
@@ -21,6 +21,14 @@ CLASS_CONF_THRESHOLD = {
     "broken": 0.40,
     "mouldy": 0.30,
     "defective": 0.40,
+}
+
+CLASS_BIAS = {
+    "good": 3.8,
+    "cracked": 1.5,
+    "broken": 1.0,
+    "mouldy": 1.0,
+    "defective": 1.0,
 }
 
 
@@ -101,22 +109,22 @@ class AdonaiAdapter(BaseInspectionAdapter):
             confidences = boxes.conf.detach().cpu().numpy().tolist() if boxes.conf is not None else [None] * len(classes)
             for raw_index, class_id in enumerate(classes):
                 class_name = _class_name(names, class_id)
-                conf = float(confidences[raw_index]) if confidences[raw_index] is not None else None
-                if conf is not None and conf < CLASS_CONF_THRESHOLD.get(class_name.lower(), confidence):
+                original_confidence = float(confidences[raw_index]) if confidences[raw_index] is not None else None
+                adjusted_confidence = (
+                    min(0.95, original_confidence * CLASS_BIAS.get(class_name.lower(), 1.0))
+                    if original_confidence is not None
+                    else None
+                )
+                if adjusted_confidence is not None and adjusted_confidence < CLASS_CONF_THRESHOLD.get(class_name.lower(), 0.40):
                     continue
                 x1, y1, x2, y2 = [int(value) for value in xyxy[raw_index]]
                 contour = contour_from_box(x1, y1, x2, y2)
-                record = _quality_from_label(class_name, enhanced, contour, conf)
+                record = _quality_from_label(class_name, enhanced, contour, adjusted_confidence)
                 record["id"] = len(detections) + 1
                 detections.append(record)
                 colour = (0, 180, 0) if record["quality_status"] == "Healthy" else (0, 0, 220)
                 cv2.rectangle(annotated, (x1, y1), (x2, y2), colour, 2)
-                draw_label(annotated, f"{record['quality_status']} | {record['defect_type']}", x1, y1, colour)
-
-        fallback_used = False
-        if not detections:
-            detections = _quality_from_contours(enhanced, annotated)
-            fallback_used = True
+                draw_label(annotated, f"{class_name} {adjusted_confidence:.0%}", x1, y1, colour)
 
         quality_counts = Counter(row["quality_status"] for row in detections)
         defect_counts = Counter(row["defect_type"] for row in detections)
@@ -144,7 +152,7 @@ class AdonaiAdapter(BaseInspectionAdapter):
                 "fps": 1.0 / elapsed,
                 "confidence": confidence,
                 "weights": str(self.weights_path),
-                "fallback": "OpenCV quality contour analysis" if fallback_used else "",
+                "class_bias": CLASS_BIAS,
             },
         )
 
@@ -191,21 +199,3 @@ def _quality_from_label(class_name: str, image_bgr: np.ndarray, contour: np.ndar
         }
     )
     return record
-
-
-def _quality_from_contours(image_bgr: np.ndarray, annotated: np.ndarray) -> list[dict[str, Any]]:
-    min_area = max(250, image_bgr.shape[0] * image_bgr.shape[1] * 0.0004)
-    mask = foreground_mask(image_bgr)
-    contours = contours_from_mask(image_bgr, mask, int(min_area))
-    detections: list[dict[str, Any]] = []
-    for contour in sorted(contours, key=cv2.contourArea, reverse=True):
-        if cv2.contourArea(contour) < min_area:
-            continue
-        record = quality_record(image_bgr, contour, None)
-        record["id"] = len(detections) + 1
-        detections.append(record)
-        x, y, _, _ = cv2.boundingRect(contour)
-        colour = (0, 180, 0) if record["quality_status"] == "Healthy" else (0, 0, 220)
-        cv2.drawContours(annotated, [contour], -1, colour, 2)
-        draw_label(annotated, f"{record['quality_status']} | {record['defect_type']}", x, y, colour)
-    return detections

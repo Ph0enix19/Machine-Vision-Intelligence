@@ -144,10 +144,10 @@ def make_unavailable_result(
     )
 
 
-def ensure_result(result: dict[str, Any] | None, fallback_frame: np.ndarray | None = None) -> dict[str, Any]:
+def ensure_result(result: dict[str, Any] | None, default_frame: np.ndarray | None = None) -> dict[str, Any]:
     if not isinstance(result, dict):
         return make_unavailable_result(
-            annotated_frame=fallback_frame,
+            annotated_frame=default_frame,
             member="Unknown",
             task_id="",
             task_name="Unknown Task",
@@ -156,7 +156,7 @@ def ensure_result(result: dict[str, Any] | None, fallback_frame: np.ndarray | No
         )
 
     if "task_id" in result and "task_name" in result:
-        result.setdefault("annotated_frame", fallback_frame)
+        result.setdefault("annotated_frame", default_frame)
         result.setdefault("member", TASKS.get(result.get("task_id", ""), {}).get("member", "Unknown"))
         result.setdefault("method", result.get("metadata", {}).get("method", "Unknown"))
         result.setdefault("summary", {})
@@ -172,7 +172,7 @@ def ensure_result(result: dict[str, Any] | None, fallback_frame: np.ndarray | No
     counts = result.get("counts") or {}
     total = sum(int(value or 0) for value in counts.values()) or len(detections)
     return make_task_result(
-        annotated_frame=result.get("annotated_frame", fallback_frame),
+        annotated_frame=result.get("annotated_frame", default_frame),
         member=member,
         task_id="",
         task_name="Legacy Output",

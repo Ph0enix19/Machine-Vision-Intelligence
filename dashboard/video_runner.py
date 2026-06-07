@@ -58,7 +58,7 @@ def process_video(
             if not ok:
                 break
             frame_index += 1
-            result = ensure_result(adapter.process_frame(frame, **adapter_options), fallback_frame=frame)
+            result = ensure_result(adapter.process_frame(frame, **adapter_options), default_frame=frame)
             last_result = result
             annotated = result.get("annotated_frame") if result.get("annotated_frame") is not None else frame
             if annotated.shape[1] != width or annotated.shape[0] != height:

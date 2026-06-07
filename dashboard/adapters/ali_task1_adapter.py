@@ -35,7 +35,7 @@ class AliTask1Adapter(BaseInspectionAdapter):
         if self.source_file is None:
             return "Unavailable: Ali_Task1.py was not found in MVI_Task1."
         if self._load_error:
-            return f"Available with fallback warning: {self._load_error}"
+            return f"Unavailable: {self._load_error}"
         return f"Available. Detected {self.source_file.name}."
 
     def process_image(self, image_bgr: np.ndarray, **options: Any) -> dict[str, Any]:

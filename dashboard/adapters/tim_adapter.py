@@ -13,7 +13,7 @@ import numpy as np
 from dashboard.adapters.base import BaseInspectionAdapter
 from dashboard.config import DEFAULT_IMG_SIZE, TIM_YOLO_WEIGHTS
 from dashboard.results_schema import make_task_result, make_unavailable_result
-from dashboard.vision_tasks import contour_from_box, contours_from_mask, draw_label, foreground_mask, texture_record
+from dashboard.vision_tasks import contour_from_box, draw_label, texture_record
 
 
 class TimAdapter(BaseInspectionAdapter):
@@ -74,10 +74,6 @@ class TimAdapter(BaseInspectionAdapter):
 
         annotated = image_bgr.copy()
         detections = _texture_detections_from_yolo(image_bgr, annotated, result)
-        fallback_used = False
-        if not detections:
-            detections = _texture_detections_from_contours(image_bgr, annotated)
-            fallback_used = True
         texture_counts = Counter(row["texture_label"] for row in detections)
         scores = [float(row["texture_score"]) for row in detections if row.get("texture_score") is not None]
         elapsed = max(time.perf_counter() - start, 1e-6)
@@ -102,7 +98,6 @@ class TimAdapter(BaseInspectionAdapter):
                 "fps": 1.0 / elapsed,
                 "confidence": confidence,
                 "weights": str(self.weights_path),
-                "fallback": "OpenCV contour texture analysis" if fallback_used else "",
             },
         )
 
@@ -127,20 +122,4 @@ def _texture_detections_from_yolo(image_bgr: np.ndarray, annotated: np.ndarray, 
         colour = (0, 180, 0) if record["texture_label"] == "Smooth" else (0, 165, 255) if record["texture_label"] == "Medium" else (0, 0, 220)
         cv2.drawContours(annotated, [contour], -1, colour, 2)
         draw_label(annotated, f"{record['texture_label']} {record['texture_score']:.2f}", x1, y1, colour)
-    return detections
-
-
-def _texture_detections_from_contours(image_bgr: np.ndarray, annotated: np.ndarray) -> list[dict[str, Any]]:
-    min_area = max(250, image_bgr.shape[0] * image_bgr.shape[1] * 0.0004)
-    mask = foreground_mask(image_bgr)
-    contours = contours_from_mask(image_bgr, mask, int(min_area))
-    detections: list[dict[str, Any]] = []
-    for contour in sorted(contours, key=cv2.contourArea, reverse=True):
-        record = texture_record(image_bgr, contour, None)
-        record["id"] = len(detections) + 1
-        detections.append(record)
-        colour = (0, 180, 0) if record["texture_label"] == "Smooth" else (0, 165, 255) if record["texture_label"] == "Medium" else (0, 0, 220)
-        x, y, _, _ = cv2.boundingRect(contour)
-        cv2.drawContours(annotated, [contour], -1, colour, 2)
-        draw_label(annotated, f"{record['texture_label']} {record['texture_score']:.2f}", x, y, colour)
     return detections

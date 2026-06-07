@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import time
 from pathlib import Path
 from typing import Any
 
@@ -17,7 +18,9 @@ from dashboard.config import (
     DEFAULT_CONFIDENCE,
     DEFAULT_DEVICE,
     DEFAULT_IMG_SIZE,
+    HANY_ROBOFLOW_API_KEY,
     HEMDAN_YOLO_WEIGHTS,
+    HIK_MVS_SDK_PATH,
     OUTPUT_RESULTS_DIR,
     OUTPUT_VIDEOS_DIR,
     ROOT,
@@ -25,6 +28,7 @@ from dashboard.config import (
     ensure_output_dirs,
     find_mvi_task1_files,
 )
+from dashboard.hik_camera import HikCameraError, HikMVSCamera, hik_camera_status
 from dashboard.results_schema import aggregate_results, compact_rows, detections_to_rows, ensure_result
 from dashboard.utils import (
     bgr_to_rgb,
@@ -222,6 +226,9 @@ def init_state() -> None:
     st.session_state.setdefault("run_history", [])
     st.session_state.setdefault("latest_results", [])
     st.session_state.setdefault("latest_detection_rows", [])
+    st.session_state.setdefault("hik_camera", None)
+    st.session_state.setdefault("hik_running", False)
+    st.session_state.setdefault("hik_adapter", None)
 
 
 def adapter_by_name(name: str):
@@ -548,25 +555,127 @@ def page_live() -> None:
         st.error(adapter.availability_message())
         return
 
-    webrtc_streamer(
-        key=f"browser-camera-{safe_filename(adapter.name)}",
-        video_frame_callback=make_video_frame_callback(adapter, options),
-        rtc_configuration=get_rtc_configuration(),
-        media_stream_constraints={
-            "video": {
-                "width": {"ideal": 640},
-                "height": {"ideal": 480},
-                "facingMode": {"ideal": "environment"},
-            },
-            "audio": False,
-        },
-        async_processing=True,
-        video_html_attrs={
-            "autoPlay": True,
-            "controls": False,
-            "muted": True,
-        },
+    camera_source = st.sidebar.radio(
+        "Camera source",
+        ["Browser webcam", "HIK MVS camera"],
+        key="live_camera_source",
     )
+    if camera_source == "Browser webcam":
+        release_hik_camera()
+        try:
+            rtc_configuration = get_rtc_configuration()
+        except RuntimeError as exc:
+            st.error(str(exc))
+            return
+        webrtc_streamer(
+            key=f"browser-camera-{safe_filename(adapter.name)}",
+            video_frame_callback=make_video_frame_callback(adapter, options),
+            rtc_configuration=rtc_configuration,
+            media_stream_constraints={
+                "video": {
+                    "width": {"ideal": 640},
+                    "height": {"ideal": 480},
+                    "facingMode": {"ideal": "environment"},
+                },
+                "audio": False,
+            },
+            async_processing=True,
+            video_html_attrs={
+                "autoPlay": True,
+                "controls": False,
+                "muted": True,
+            },
+        )
+        return
+
+    render_hik_camera(adapter, options)
+
+
+def render_hik_camera(adapter: Any, options: dict[str, Any]) -> None:
+    available, status, camera_count = hik_camera_status()
+    st.info(status)
+    if not available:
+        st.caption(f"Configured SDK path: {HIK_MVS_SDK_PATH}")
+        return
+
+    max_index = max(camera_count - 1, 0)
+    device_index = st.sidebar.number_input(
+        "HIK camera index",
+        min_value=0,
+        max_value=max_index,
+        value=0,
+        step=1,
+    )
+    exposure_time = st.sidebar.number_input(
+        "HIK exposure time (microseconds)",
+        min_value=500.0,
+        max_value=20000.0,
+        value=5000.0,
+        step=500.0,
+    )
+    start_col, stop_col, _ = st.columns([1, 1, 5])
+    if start_col.button("Start HIK camera", type="primary"):
+        release_hik_camera()
+        camera = HikMVSCamera(int(device_index), float(exposure_time))
+        try:
+            camera.open()
+        except HikCameraError as exc:
+            st.error(str(exc))
+            return
+        st.session_state.hik_camera = camera
+        st.session_state.hik_adapter = adapter
+        st.session_state.hik_running = True
+        st.rerun()
+
+    if stop_col.button("Stop HIK camera"):
+        release_hik_camera()
+        st.rerun()
+
+    if not st.session_state.hik_running:
+        return
+
+    active_adapter = st.session_state.hik_adapter
+    if active_adapter is None:
+        release_hik_camera()
+        st.error("The HIK camera session has no selected inspection module.")
+        return
+    if active_adapter.name != adapter.name:
+        st.warning(f"HIK camera is still running with {active_adapter.name}. Stop it before changing modules.")
+
+    camera = st.session_state.hik_camera
+    if camera is None:
+        release_hik_camera()
+        st.error("The HIK camera session is missing. Start the camera again.")
+        return
+
+    try:
+        frame = camera.read()
+    except HikCameraError as exc:
+        release_hik_camera()
+        st.error(str(exc))
+        return
+
+    result = call_adapter(
+        active_adapter,
+        frame,
+        frame=True,
+        source_name="hik_mvs_camera",
+        **options,
+    )
+    st.session_state.latest_results = [result]
+    st.session_state.latest_detection_rows = compact_rows(
+        detections_to_rows(result, source=f"HIK - {active_adapter.name}")
+    )
+    annotated = result.get("annotated_frame")
+    st.image(
+        bgr_to_rgb(annotated if annotated is not None else frame),
+        channels="RGB",
+        caption="HIK MVS live output",
+        width="stretch",
+    )
+    display_result(result, title=f"HIK Live Result - {active_adapter.name}")
+    time.sleep(0.03)
+    st.rerun()
 
 
 def page_results() -> None:
@@ -629,6 +738,26 @@ def page_debug() -> None:
     st.title("System Status / Debug")
     st.subheader("Adapter Status")
     st.dataframe(adapter_status_dataframe(), width="stretch", hide_index=True)
+    hik_available, hik_message, _ = hik_camera_status()
+    st.subheader("Deployment Configuration")
+    st.dataframe(
+        pd.DataFrame(
+            [
+                {
+                    "Setting": "Hany Roboflow API key",
+                    "Configured": bool(HANY_ROBOFLOW_API_KEY),
+                    "Status": "Configured" if HANY_ROBOFLOW_API_KEY else "Missing",
+                },
+                {
+                    "Setting": "HIK MVS camera",
+                    "Configured": hik_available,
+                    "Status": hik_message,
+                },
+            ]
+        ),
+        width="stretch",
+        hide_index=True,
+    )
     st.subheader("Detected MVI_Task1 Files")
     task1_files = find_mvi_task1_files()
     if task1_files:
@@ -678,6 +807,21 @@ def status_card(title: str, ok: bool, path: Path) -> str:
 def tab_label(result: dict[str, Any]) -> str:
     result = ensure_result(result)
     return f"{result.get('member')} {result.get('task_id')} - {result.get('task_name')}"
+
+
+def release_hik_camera() -> None:
+    camera = st.session_state.get("hik_camera")
+    close_error = ""
+    if camera is not None:
+        try:
+            camera.close()
+        except Exception as exc:
+            close_error = str(exc)
+    st.session_state.hik_camera = None
+    st.session_state.hik_adapter = None
+    st.session_state.hik_running = False
+    if close_error:
+        st.warning(f"HIK camera cleanup failed: {close_error}")
 
 
 def main() -> None:

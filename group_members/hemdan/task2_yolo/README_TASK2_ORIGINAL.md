@@ -62,11 +62,7 @@ CLI alternative:
 yolo task=segment mode=train model=yolo11n-seg.pt data=dataset/data.yaml epochs=300 imgsz=640 batch=4 device=0
 ```
 
-CPU fallback:
-
-```powershell
-yolo task=segment mode=train model=yolo11n-seg.pt data=dataset/data.yaml epochs=300 imgsz=640 batch=4 device=cpu
-```
+This training configuration requires CUDA device 0.
 
 ## Validate
 
