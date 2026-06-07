@@ -10,7 +10,7 @@ Streamlit dashboard for an APU Machine Vision assignment. The app combines sever
 - Maturity and health analysis using colour features.
 - Texture inspection using localization and OpenCV texture metrics.
 - Tim Task 1 texture classification using his original OpenCV ranking and temporal tracking logic.
-- Upload workflows for images and videos, plus optional local live camera inspection.
+- Browser webcam inspection through WebRTC, plus image and video uploads.
 
 ## App Entry Point
 
@@ -82,6 +82,7 @@ requirements.txt          Python packages for Streamlit deployment
 ## Notes
 
 - Training is not started from the dashboard. Use the scripts folder for local training or validation.
-- Streamlit Cloud does not provide access to your local webcam, so image and video upload workflows are the best deployment targets.
+- Streamlit Cloud cannot use server camera indexes. The live page instead uses browser WebRTC so each visitor can grant access to their own webcam.
+- Some restrictive networks require a TURN service. Optional `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN` secrets enable Twilio Network Traversal Service automatically.
 - Streamlit Cloud cannot save files to a user-selected folder on the visitor's computer. Processed videos and CSV files are generated on the server and exposed with download buttons in the browser.
 - Generated outputs, raw datasets, cache folders, virtual environments, and large source ZIP files are intentionally ignored from git.

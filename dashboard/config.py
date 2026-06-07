@@ -18,6 +18,14 @@ def _setting(name: str, default: str = "") -> str:
     value = os.getenv(name)
     if value:
         return value
+    try:
+        import streamlit as st
+
+        secret_value = st.secrets.get(name)
+        if secret_value is not None:
+            return str(secret_value)
+    except (FileNotFoundError, KeyError, RuntimeError):
+        pass
     secrets_path = ROOT / ".streamlit" / "secrets.toml"
     if secrets_path.exists():
         try:
@@ -32,6 +40,8 @@ def _setting(name: str, default: str = "") -> str:
 
 HANY_ROBOFLOW_API_KEY = _setting("MVI_HANY_ROBOFLOW_API_KEY")
 HANY_ROBOFLOW_MODEL_ID = _setting("MVI_HANY_ROBOFLOW_MODEL_ID", "mvi-task-2-dqpn6/2")
+TWILIO_ACCOUNT_SID = _setting("TWILIO_ACCOUNT_SID")
+TWILIO_AUTH_TOKEN = _setting("TWILIO_AUTH_TOKEN")
 
 MVI_TASK1_CANDIDATE_DIRS = [
     ROOT / "MVI_Task1",

@@ -6,3 +6,4 @@ streamlit
 pandas
 pillow
 requests
+streamlit-webrtc>=0.72.0,<1

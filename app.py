@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 import html
-import time
 from pathlib import Path
 from typing import Any
 
 import cv2
 import pandas as pd
 import streamlit as st
+from streamlit_webrtc import webrtc_streamer
 
 from dashboard.adapters import get_adapters
+from dashboard.browser_camera import get_rtc_configuration, make_video_frame_callback
 from dashboard.config import (
     ALI_YOLO_WEIGHTS,
     DATASET_YAML,
@@ -28,11 +29,9 @@ from dashboard.results_schema import aggregate_results, compact_rows, detections
 from dashboard.utils import (
     bgr_to_rgb,
     call_adapter,
-    check_webcam,
     detections_dataframe,
     dict_dataframe,
     format_value,
-    open_camera,
     safe_filename,
     save_uploaded_temp,
     timestamp_slug,
@@ -223,10 +222,6 @@ def init_state() -> None:
     st.session_state.setdefault("run_history", [])
     st.session_state.setdefault("latest_results", [])
     st.session_state.setdefault("latest_detection_rows", [])
-    st.session_state.setdefault("live_running", False)
-    st.session_state.setdefault("live_capture", None)
-    st.session_state.setdefault("live_camera_index", None)
-    st.session_state.setdefault("latest_live_result", None)
 
 
 def adapter_by_name(name: str):
@@ -428,11 +423,6 @@ def page_home() -> None:
     status_cols[1].markdown(status_card("Dataset YAML", DATASET_YAML.exists(), DATASET_YAML), unsafe_allow_html=True)
     status_cols[2].markdown(status_card("Ali Weights", ALI_YOLO_WEIGHTS.exists(), ALI_YOLO_WEIGHTS), unsafe_allow_html=True)
     status_cols[3].markdown(status_card("Tim Weights", TIM_YOLO_WEIGHTS.exists(), TIM_YOLO_WEIGHTS), unsafe_allow_html=True)
-    if st.button("Check Webcam Index 0"):
-        ok, message = check_webcam(0)
-        st.success(message) if ok else st.warning(message)
-
-
 def page_upload_image() -> None:
     st.title("Upload Image Inspection")
     adapter = adapter_selector("Image module", "image_adapter")
@@ -554,59 +544,29 @@ def page_live() -> None:
     st.title("Live Camera Inspection")
     adapter = adapter_selector("Live module", "live_adapter")
     options = inference_controls("live")
-    camera_index = st.sidebar.selectbox("Camera index", [0, 1, 2], index=0)
-    show_raw = st.sidebar.checkbox("Show raw frame", value=False)
-
-    start_col, stop_col, _ = st.columns([1, 1, 5])
-    if start_col.button("Start", type="primary"):
-        release_live_capture()
-        st.session_state.live_capture = open_camera(int(camera_index))
-        st.session_state.live_camera_index = int(camera_index)
-        st.session_state.live_running = True
-        st.rerun()
-    if stop_col.button("Stop"):
-        release_live_capture()
-        st.session_state.live_running = False
-        st.rerun()
-
-    if not st.session_state.live_running:
-        st.info("Choose a module and press Start. The feed keeps running until Stop is pressed.")
-        if st.session_state.latest_live_result:
-            display_result(st.session_state.latest_live_result, title="Latest Live Result")
+    if not adapter.is_available():
+        st.error(adapter.availability_message())
         return
 
-    capture = st.session_state.live_capture
-    if capture is None or not capture.isOpened():
-        release_live_capture()
-        st.session_state.live_running = False
-        st.error(f"Could not open camera index {camera_index}. Try another index or close apps using the camera.")
-        return
-
-    ok, frame = capture.read()
-    if not ok:
-        release_live_capture()
-        st.session_state.live_running = False
-        st.warning("Camera opened but did not return a frame.")
-        return
-
-    start = time.perf_counter()
-    result = call_adapter(adapter, frame, frame=True, **options)
-    result["metadata"]["fps"] = 1.0 / max(time.perf_counter() - start, 1e-6)
-    st.session_state.latest_live_result = result
-    remember_run(f"Live - {adapter.name}", result)
-
-    annotated = result.get("annotated_frame")
-    if annotated is None:
-        annotated = frame
-    if show_raw:
-        left, right = st.columns(2)
-        left.image(bgr_to_rgb(frame), channels="RGB", caption="Raw camera frame", width="stretch")
-        right.image(bgr_to_rgb(annotated), channels="RGB", caption="Annotated output", width="stretch")
-    else:
-        st.image(bgr_to_rgb(annotated), channels="RGB", caption="Annotated live output", width="stretch")
-    display_result(result, title="Latest Live Result")
-    time.sleep(0.03)
-    st.rerun()
+    webrtc_streamer(
+        key=f"browser-camera-{safe_filename(adapter.name)}",
+        video_frame_callback=make_video_frame_callback(adapter, options),
+        rtc_configuration=get_rtc_configuration(),
+        media_stream_constraints={
+            "video": {
+                "width": {"ideal": 640},
+                "height": {"ideal": 480},
+                "facingMode": {"ideal": "environment"},
+            },
+            "audio": False,
+        },
+        async_processing=True,
+        video_html_attrs={
+            "autoPlay": True,
+            "controls": False,
+            "muted": True,
+        },
+    )
 
 
 def page_results() -> None:
@@ -718,17 +678,6 @@ def status_card(title: str, ok: bool, path: Path) -> str:
 def tab_label(result: dict[str, Any]) -> str:
     result = ensure_result(result)
     return f"{result.get('member')} {result.get('task_id')} - {result.get('task_name')}"
-
-
-def release_live_capture() -> None:
-    capture = st.session_state.get("live_capture")
-    if capture is not None:
-        try:
-            capture.release()
-        except Exception:
-            pass
-    st.session_state.live_capture = None
-    st.session_state.live_camera_index = None
 
 
 def main() -> None:
