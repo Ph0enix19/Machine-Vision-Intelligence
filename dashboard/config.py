@@ -42,12 +42,6 @@ HANY_ROBOFLOW_API_KEY = _setting("MVI_HANY_ROBOFLOW_API_KEY")
 HANY_ROBOFLOW_MODEL_ID = _setting("MVI_HANY_ROBOFLOW_MODEL_ID", "mvi-task-2-dqpn6/2")
 TWILIO_ACCOUNT_SID = _setting("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = _setting("TWILIO_AUTH_TOKEN")
-HIK_MVS_SDK_PATH = Path(
-    _setting(
-        "HIK_MVS_SDK_PATH",
-        r"C:\Program Files (x86)\MVS\Development\Samples\Python\MvImport",
-    )
-)
 
 MVI_TASK1_CANDIDATE_DIRS = [
     ROOT / "MVI_Task1",

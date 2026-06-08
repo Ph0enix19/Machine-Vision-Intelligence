@@ -20,7 +20,6 @@ from dashboard.config import (
     DEFAULT_IMG_SIZE,
     HANY_ROBOFLOW_API_KEY,
     HEMDAN_YOLO_WEIGHTS,
-    HIK_MVS_SDK_PATH,
     OUTPUT_RESULTS_DIR,
     OUTPUT_VIDEOS_DIR,
     ROOT,
@@ -28,7 +27,7 @@ from dashboard.config import (
     ensure_output_dirs,
     find_mvi_task1_files,
 )
-from dashboard.hik_camera import HikCameraError, HikMVSCamera, hik_camera_status
+from dashboard.hik_camera import HIK_MVS_SDK_PATH, HikCameraError, HikMVSCamera, hik_camera_status
 from dashboard.results_schema import aggregate_results, compact_rows, detections_to_rows, ensure_result
 from dashboard.utils import (
     bgr_to_rgb,

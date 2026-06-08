@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import os
 import sys
 from ctypes import POINTER, byref, c_ubyte, cast, memset, sizeof
 from pathlib import Path
@@ -9,7 +10,25 @@ from types import ModuleType
 import cv2
 import numpy as np
 
-from dashboard.config import HIK_MVS_SDK_PATH
+
+def configured_hik_sdk_path() -> Path:
+    configured_path = os.getenv("HIK_MVS_SDK_PATH")
+    if configured_path:
+        return Path(configured_path)
+
+    try:
+        import streamlit as st
+
+        secret_path = st.secrets.get("HIK_MVS_SDK_PATH")
+        if secret_path:
+            return Path(str(secret_path))
+    except (FileNotFoundError, KeyError, RuntimeError):
+        pass
+
+    return Path(r"C:\Program Files (x86)\MVS\Development\Samples\Python\MvImport")
+
+
+HIK_MVS_SDK_PATH = configured_hik_sdk_path()
 
 
 class HikCameraError(RuntimeError):
