@@ -46,6 +46,10 @@ TASKS = {
         "badge": "Task III",
         "table_columns": [
             "id",
+            "original_tag",
+            "class_name",
+            "confidence",
+            "classification_detail",
             "length",
             "width",
             "area",
@@ -308,6 +312,7 @@ def summarize_rows_for_task(task_id: str, rows: list[dict[str, Any]]) -> tuple[d
         areas = [float(row["area"]) for row in rows if _is_number(row.get("area"))]
         aspect_ratios = [float(row["aspect_ratio"]) for row in rows if _is_number(row.get("aspect_ratio"))]
         shapes = Counter(row.get("shape") for row in rows if row.get("shape"))
+        class_counts = Counter(row.get("class_name") for row in rows if row.get("class_name"))
         summary = {
             "total_measured": len(rows),
             "average_length": mean(lengths) if lengths else None,
@@ -315,8 +320,15 @@ def summarize_rows_for_task(task_id: str, rows: list[dict[str, Any]]) -> tuple[d
             "average_area": mean(areas) if areas else None,
             "average_aspect_ratio": mean(aspect_ratios) if aspect_ratios else None,
             "most_common_shape": shapes.most_common(1)[0][0] if shapes else None,
+            "mature_count": class_counts.get("MATURE", 0),
+            "immature_count": class_counts.get("IMMATURE", 0),
+            "detected_tags": ", ".join(sorted(class_counts)) or "None",
         }
-        return summary, {"measurement_units": "pixels", "shape_counts": dict(shapes)}
+        return summary, {
+            "measurement_units": "pixels",
+            "class_counts": dict(class_counts),
+            "shape_counts": dict(shapes),
+        }
 
     if task_id == "IV":
         maturity = Counter(row.get("maturity_label") for row in rows if row.get("maturity_label"))

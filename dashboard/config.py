@@ -14,7 +14,7 @@ ALI_YOLO_WEIGHTS = ROOT / "group_members" / "ali" / "original" / "best.pt"
 
 ADONAI_DEFAULT_WEIGHTS = ROOT / "group_members" / "adonai" / "original" / "weights" / "best.pt"
 ADONAI_YOLO_WEIGHTS = Path(os.getenv("MVI_ADONAI_MODEL", str(ADONAI_DEFAULT_WEIGHTS)))
-def _setting(name: str, default: str = "") -> str:
+def get_setting(name: str, default: str = "") -> str:
     value = os.getenv(name)
     if value:
         return value
@@ -38,10 +38,10 @@ def _setting(name: str, default: str = "") -> str:
     return default
 
 
-HANY_ROBOFLOW_API_KEY = _setting("MVI_HANY_ROBOFLOW_API_KEY")
-HANY_ROBOFLOW_MODEL_ID = _setting("MVI_HANY_ROBOFLOW_MODEL_ID", "mvi-task-2-dqpn6/2")
-TWILIO_ACCOUNT_SID = _setting("TWILIO_ACCOUNT_SID")
-TWILIO_AUTH_TOKEN = _setting("TWILIO_AUTH_TOKEN")
+HANY_ROBOFLOW_API_KEY = get_setting("MVI_HANY_ROBOFLOW_API_KEY")
+HANY_ROBOFLOW_MODEL_ID = get_setting("MVI_HANY_ROBOFLOW_MODEL_ID", "mvi-task-2-dqpn6/2")
+TWILIO_ACCOUNT_SID = get_setting("TWILIO_ACCOUNT_SID")
+TWILIO_AUTH_TOKEN = get_setting("TWILIO_AUTH_TOKEN")
 
 MVI_TASK1_CANDIDATE_DIRS = [
     ROOT / "MVI_Task1",

@@ -10,7 +10,7 @@ import numpy as np
 import requests
 
 from dashboard.adapters.base import BaseInspectionAdapter
-from dashboard.config import HANY_ROBOFLOW_API_KEY, HANY_ROBOFLOW_MODEL_ID
+from dashboard.config import get_setting
 from dashboard.results_schema import make_task_result, make_unavailable_result
 from dashboard.vision_tasks import draw_label
 
@@ -27,19 +27,21 @@ class HanyAdapter(BaseInspectionAdapter):
 
     def __init__(self) -> None:
         self._inference_error = ""
+        self.api_key = get_setting("MVI_HANY_ROBOFLOW_API_KEY")
+        self.model_id = get_setting("MVI_HANY_ROBOFLOW_MODEL_ID", "mvi-task-2-dqpn6/2")
 
     def is_available(self) -> bool:
-        return bool(HANY_ROBOFLOW_API_KEY)
+        return bool(self.api_key)
 
     def availability_message(self) -> str:
-        if not HANY_ROBOFLOW_API_KEY:
+        if not self.api_key:
             return "Unavailable: add MVI_HANY_ROBOFLOW_API_KEY to enable Hany's Roboflow model."
         if self._inference_error:
             return f"Roboflow error: {self._inference_error}"
-        return f"Available with Roboflow model {HANY_ROBOFLOW_MODEL_ID}."
+        return f"Available with Roboflow model {self.model_id}. Cloud secret detected."
 
     def process_image(self, image_bgr: np.ndarray, **options: Any) -> dict[str, Any]:
-        if not HANY_ROBOFLOW_API_KEY:
+        if not self.api_key:
             return make_unavailable_result(
                 annotated_frame=image_bgr.copy(),
                 member=self.member,
@@ -94,13 +96,14 @@ class HanyAdapter(BaseInspectionAdapter):
                 "adapter": self.name,
                 "fps": 1.0 / elapsed,
                 "inference_mode": "Roboflow",
-                "roboflow_model": HANY_ROBOFLOW_MODEL_ID,
+                "roboflow_model": self.model_id,
+                "credential_status": "Configured",
                 "original_code": "group_members/hany/original/V3.py",
             },
         )
 
     def _infer(self, image_bgr: np.ndarray, confidence: float) -> list[dict[str, Any]]:
-        if not HANY_ROBOFLOW_API_KEY:
+        if not self.api_key:
             return []
         try:
             encoded_ok, encoded_image = cv2.imencode(".jpg", image_bgr)
@@ -108,9 +111,9 @@ class HanyAdapter(BaseInspectionAdapter):
                 self._inference_error = "Could not encode image for Roboflow."
                 return []
             response = requests.post(
-                f"https://detect.roboflow.com/{HANY_ROBOFLOW_MODEL_ID}",
+                f"https://detect.roboflow.com/{self.model_id}",
                 params={
-                    "api_key": HANY_ROBOFLOW_API_KEY,
+                    "api_key": self.api_key,
                     "confidence": int(confidence * 100),
                     "format": "json",
                 },

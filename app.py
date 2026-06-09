@@ -70,6 +70,9 @@ TASK_METRICS = {
     ],
     "III": [
         ("Total Seeds Measured", "total_measured"),
+        ("MATURE", "mature_count"),
+        ("IMMATURE", "immature_count"),
+        ("Detected Original Tags", "detected_tags"),
         ("Average Length", "average_length"),
         ("Average Width", "average_width"),
         ("Average Area", "average_area"),
@@ -726,7 +729,7 @@ def page_about() -> None:
     st.subheader("Task III - Seed Growth Measurement")
     st.write("Ali's provided YOLO segmentation weights are used safely for seed localization. The dashboard computes pixel length, width, area, perimeter, aspect ratio, circularity, compactness, equivalent diameter, and shape.")
     st.subheader("Task IV - Maturity and Health Condition")
-    st.write("Hany's safe dashboard module performs RGB/HSV colour analysis, colour uniformity, dark patch ratio, discoloration, maturity labels, and health labels.")
+    st.write("Hany's Task 2 module uses the configured Roboflow hosted model and preserves its original class labels, confidence scores, and bounding boxes. The dashboard maps those classes to maturity and health summaries where the label meaning is clear.")
     st.subheader("Task V - Texture Inspection")
     st.write("Tim's YOLO model localizes seeds. OpenCV texture analysis then estimates smooth, medium, or rough surface condition using edge density, entropy, and energy.")
     st.subheader("Assignment Alignment")
@@ -745,7 +748,11 @@ def page_debug() -> None:
                 {
                     "Setting": "Hany Roboflow API key",
                     "Configured": bool(HANY_ROBOFLOW_API_KEY),
-                    "Status": "Configured" if HANY_ROBOFLOW_API_KEY else "Missing",
+                    "Status": (
+                        f"Configured for model {HANY_ROBOFLOW_MODEL_ID}"
+                        if HANY_ROBOFLOW_API_KEY
+                        else "Missing MVI_HANY_ROBOFLOW_API_KEY"
+                    ),
                 },
                 {
                     "Setting": "HIK MVS camera",
