@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import sys
 
 import cv2
 import numpy as np
@@ -24,7 +25,11 @@ def first_frame(path: Path) -> np.ndarray:
 
 
 def main() -> int:
+    tkinter_before = sys.modules.get("tkinter")
     adapter = AliTask1Adapter()
+    assert adapter.is_available(), adapter.availability_message()
+    assert "headless dashboard shim" in adapter.availability_message()
+    assert sys.modules.get("tkinter") is tkinter_before
     source = first_frame(SAMPLE_VIDEO)
     expected = adapter.process_image(source)
     small = adapter.process_image(cv2.resize(source, (320, 240)))

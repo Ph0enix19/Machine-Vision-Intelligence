@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import time
+import sys
 from collections import Counter
+from contextlib import contextmanager
 from statistics import mean
+from types import ModuleType
 from typing import Any
 
 import cv2
@@ -33,14 +36,16 @@ class AliTask1Adapter(BaseInspectionAdapter):
         self._load_error = ""
 
     def is_available(self) -> bool:
-        return self.source_file is not None
+        return self.source_file is not None and self._load_module() is not None
 
     def availability_message(self) -> str:
         if self.source_file is None:
             return "Unavailable: Ali_Task1.py was not found in MVI_Task1."
         if self._load_error:
             return f"Unavailable: {self._load_error}"
-        return f"Available. Detected {self.source_file.name}."
+        if self._module is None and self._load_module() is None:
+            return f"Unavailable: {self._load_error or 'Ali Task 1 module could not be loaded.'}"
+        return f"Available. Loaded {self.source_file.name} with the headless dashboard shim."
 
     def process_image(self, image_bgr: np.ndarray, **options: Any) -> dict[str, Any]:
         module = self._load_module()
@@ -130,10 +135,11 @@ class AliTask1Adapter(BaseInspectionAdapter):
         if self._module is not None:
             return self._module
         try:
-            self._module = import_task1_module(self.source_file, "mvi_ali_task1_source")
+            with _headless_tkinter_shim():
+                self._module = import_task1_module(self.source_file, "mvi_ali_task1_source")
             return self._module
         except Exception as exc:
-            self._load_error = str(exc)
+            self._load_error = f"{type(exc).__name__}: {exc}"
             return None
 
 
@@ -208,9 +214,23 @@ def _features_from_mask(module: Any, mask: np.ndarray) -> list[tuple[np.ndarray,
         if area >= frame_area * 0.85 or (touches_most_edges and area >= frame_area * 0.25):
             continue
         features = module.extract_features(contour)
-        if features is not None:
+        if features is not None and _is_plausible_seed(contour, features, frame_area):
             valid.append((contour, features))
     return valid
+
+
+def _is_plausible_seed(contour: np.ndarray, features: dict[str, Any], frame_area: float) -> bool:
+    area = float(features.get("area") or 0.0)
+    length = float(features.get("length") or 0.0)
+    width = float(features.get("width") or 0.0)
+    aspect_ratio = float(features.get("aspect_ratio") or 0.0)
+    if area < max(1600.0, frame_area * 0.0012) or area > frame_area * 0.35:
+        return False
+    if length < 35.0 or width < 20.0 or not 1.0 <= aspect_ratio <= 4.5:
+        return False
+    hull_area = float(cv2.contourArea(cv2.convexHull(contour)))
+    solidity = area / hull_area if hull_area > 0 else 0.0
+    return solidity >= 0.55
 
 
 def _draw_annotation_on_input(
@@ -283,3 +303,32 @@ def _draw_count_panel(annotated: np.ndarray, counts: Counter[str]) -> None:
             2,
             cv2.LINE_AA,
         )
+
+
+@contextmanager
+def _headless_tkinter_shim():
+    tkinter_module = ModuleType("tkinter")
+    filedialog_module = ModuleType("tkinter.filedialog")
+
+    def unavailable_gui(*_args: Any, **_kwargs: Any):
+        raise RuntimeError("The tkinter file picker is disabled inside the Streamlit dashboard.")
+
+    tkinter_module.Tk = unavailable_gui
+    tkinter_module.filedialog = filedialog_module
+    filedialog_module.askopenfilename = unavailable_gui
+
+    previous_tkinter = sys.modules.get("tkinter")
+    previous_filedialog = sys.modules.get("tkinter.filedialog")
+    sys.modules["tkinter"] = tkinter_module
+    sys.modules["tkinter.filedialog"] = filedialog_module
+    try:
+        yield
+    finally:
+        if previous_tkinter is None:
+            sys.modules.pop("tkinter", None)
+        else:
+            sys.modules["tkinter"] = previous_tkinter
+        if previous_filedialog is None:
+            sys.modules.pop("tkinter.filedialog", None)
+        else:
+            sys.modules["tkinter.filedialog"] = previous_filedialog
