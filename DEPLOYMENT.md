@@ -11,3 +11,7 @@ Quick fixes
 - If only headless OpenCV is required, ensure opencv-python-headless is installed and uninstall opencv-python: pip uninstall -y opencv-python && pip install --no-deps opencv-python-headless
 
 After installing system packages, redeploy the app.
+
+Notes on Debian versions:
+- If libgl1-mesa-glx is not available on your host, use 'libgl1' instead. Some distributions (Debian trixie) provide libGL via 'libgl1'.
+- Extra X libraries that sometimes help: libsm6, libxrender1, libxext6.
