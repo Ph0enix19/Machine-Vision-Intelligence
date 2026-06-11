@@ -847,8 +847,8 @@ def main() -> None:
         st.error(
             "OpenCV (cv2) failed to import: " + str(CV2_IMPORT_ERROR)
             + "\n\nThis usually means the system is missing the 'libGL' shared library (libGL.so.1)."
-            + " On Debian/Ubuntu install it with: apt-get update && apt-get install -y libgl1 libglib2.0-0\n\n"
-            + "If using Streamlit Cloud, add 'libgl1' and 'libglib2.0-0' to packages.txt, or ensure only opencv-python-headless is installed "
+            + " On current Debian/Ubuntu install it with: apt-get update && apt-get install -y libgl1 libglib2.0-0t64\n\n"
+            + "If using Streamlit Cloud, add 'libgl1' and 'libglib2.0-0t64' to packages.txt, or ensure only opencv-python-headless is installed "
             + "and opencv-python is not present."
         )
         return
