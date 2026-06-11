@@ -1,4 +1,4 @@
-# Vision-Based Seed Inspection Dashboard
+# Vision-Based Seeds Inspection Dashboard
 
 Streamlit dashboard for an APU Machine Vision assignment. The app combines several seed inspection modules into one interface for live camera input, image upload, video upload, result comparison, and CSV export.
 
