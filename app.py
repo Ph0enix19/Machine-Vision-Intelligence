@@ -5,42 +5,53 @@ import time
 from pathlib import Path
 from typing import Any
 
-import cv2
 import pandas as pd
 import streamlit as st
 from streamlit_webrtc import webrtc_streamer
 
-from dashboard.adapters import get_adapters
-from dashboard.browser_camera import get_rtc_configuration, make_video_frame_callback
-from dashboard.config import (
-    ALI_YOLO_WEIGHTS,
-    DATASET_YAML,
-    DEFAULT_CONFIDENCE,
-    DEFAULT_DEVICE,
-    DEFAULT_IMG_SIZE,
-    HANY_ROBOFLOW_API_KEY,
-    HEMDAN_YOLO_WEIGHTS,
-    OUTPUT_RESULTS_DIR,
-    OUTPUT_VIDEOS_DIR,
-    ROOT,
-    TIM_YOLO_WEIGHTS,
-    ensure_output_dirs,
-    find_mvi_task1_files,
-)
-from dashboard.hik_camera import HIK_MVS_SDK_PATH, HikCameraError, HikMVSCamera, hik_camera_status
-from dashboard.results_schema import aggregate_results, compact_rows, detections_to_rows, ensure_result
-from dashboard.utils import (
-    bgr_to_rgb,
-    call_adapter,
-    detections_dataframe,
-    dict_dataframe,
-    format_value,
-    safe_filename,
-    save_uploaded_temp,
-    timestamp_slug,
-    uploaded_image_to_bgr,
-)
-from dashboard.video_runner import process_video
+# Try to import OpenCV (cv2). If it fails (for example because the system is missing
+# libGL.so.1), record the exception and continue so the app can show a friendly
+# error message instead of crashing on import.
+try:
+    import cv2  # type: ignore
+    OPENCV_AVAILABLE = True
+except Exception as _cv_exc:
+    cv2 = None  # type: ignore
+    OPENCV_AVAILABLE = False
+    CV2_IMPORT_ERROR = _cv_exc
+
+if OPENCV_AVAILABLE:
+    from dashboard.adapters import get_adapters
+    from dashboard.browser_camera import get_rtc_configuration, make_video_frame_callback
+    from dashboard.config import (
+        ALI_YOLO_WEIGHTS,
+        DATASET_YAML,
+        DEFAULT_CONFIDENCE,
+        DEFAULT_DEVICE,
+        DEFAULT_IMG_SIZE,
+        HANY_ROBOFLOW_API_KEY,
+        HEMDAN_YOLO_WEIGHTS,
+        OUTPUT_RESULTS_DIR,
+        OUTPUT_VIDEOS_DIR,
+        ROOT,
+        TIM_YOLO_WEIGHTS,
+        ensure_output_dirs,
+        find_mvi_task1_files,
+    )
+    from dashboard.hik_camera import HIK_MVS_SDK_PATH, HikCameraError, HikMVSCamera, hik_camera_status
+    from dashboard.results_schema import aggregate_results, compact_rows, detections_to_rows, ensure_result
+    from dashboard.utils import (
+        bgr_to_rgb,
+        call_adapter,
+        detections_dataframe,
+        dict_dataframe,
+        format_value,
+        safe_filename,
+        save_uploaded_temp,
+        timestamp_slug,
+        uploaded_image_to_bgr,
+    )
+    from dashboard.video_runner import process_video
 
 
 st.set_page_config(
@@ -829,6 +840,23 @@ def release_hik_camera() -> None:
 
 
 def main() -> None:
+    # If OpenCV failed to import at module import time, show a helpful error page
+    # instead of letting the app crash with an import error.
+    if not OPENCV_AVAILABLE:
+        st.set_page_config(
+            page_title="Vision-Based Seed Inspection - Error",
+            layout="wide",
+        )
+        st.title("Vision-Based Seed Inspection")
+        st.error(
+            "OpenCV (cv2) failed to import: " + str(CV2_IMPORT_ERROR)
+            + "\n\nThis usually means the system is missing the 'libGL' shared library (libGL.so.1)."
+            + " On Debian/Ubuntu install it with: apt-get update && apt-get install -y libgl1-mesa-glx libglib2.0-0\n\n"
+            + "If using Streamlit Cloud, add 'libgl1-mesa-glx' to packages.txt, or ensure only opencv-python-headless is installed "
+            + "and opencv-python is not present."
+        )
+        return
+
     ensure_output_dirs()
     init_state()
     inject_css()
